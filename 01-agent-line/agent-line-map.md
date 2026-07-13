@@ -1,33 +1,27 @@
-# Agent Line Map: Cortex PM Chief-of-Staff Agent
+# Agent-Line Map: Cortex
 
-> Module 1 · The Agent Line
+## Decisions, scored
 
-## The workflow, decision by decision
-
-List every discrete decision or action in your agent's workflow, then score each one and place it **above** the line (a human owns it) or **below** (the agent owns it). Borderline calls get an HITL checkpoint.
-
-| Decision / action | Reversibility (H/M/L) | Blast radius (H/M/L) | Measurability (H/M/L) | Above / Below | HITL? |
+| # | Decision | Reversibility | Blast radius | Measurability | Verdict |
 |---|---|---|---|---|---|
-| _Pull project state + recent GitHub/Jira activity_ | H | L | H | Below | · |
-| _Draft the weekly leadership status update_ | H | M | M | Below | spot-check |
-| _Propose next sprint's stories from the PRD (within cap)_ | M | M | M | Below | spot-check |
-| _Post the update to a channel / commit a ship date_ | L | H | M | Above | required |
-| _Mark a launch gate green / merge or close a ticket_ | L | H | M | Above | required |
-| _…_ | | | | | |
+| 1 | Pull project state + activity | High | Low | High | Below |
+| 2 | Decide relevant context / norms | High | Low | Low | Above |
+| 3 | Draft the update text | High | Low | Med | HITL |
+| 4 | Decide status color / tone framing | High | Med | Med | HITL |
+| 5 | Commit a ship date | Low | High | Med | Above |
+| 6 | Assess at-risk / escalation-likely | High | Med | Low | HITL |
+| 7 | Propose story batch within cap | High | Low | High | Below |
 
-## Agent anatomy (sketch)
+## One-line justifications
 
-- **Model:** _your default fast model + when you escalate to a frontier model, and why_
-- **Tools:** _project + activity lookup (read) · past-update search · roadmap · team norms · story proposal (capped) …_
-- **Memory:** _what persists across runs (roadmap, decisions, norms) vs. purged_
-- **Loop:** _placeholder, defined in M2 loop-spec.md_
-- **Bounds:** _placeholder, defined in M5 bounds-and-evals.md_
-- **Evals:** _placeholder, defined in M5 bounds-and-evals.md_
+1. **Pull project state + activity** (Below): Pulling state and activity sits below the line because it's easy to reverse, has a low blast radius, and is easy to verify, so the deciding factor is that all three axes are safe.
+2. **Decide relevant context / norms** (Above): Deciding relevant context sits above the line because it's easy to reverse and has a low blast radius, but is hard to verify, so the deciding factor is measurability.
+3. **Draft the update text** (HITL): Drafting the update sits at a checkpoint because it's easy to reverse and has a low blast radius, but is only moderately verifiable, so the deciding factor is measurability.
+4. **Decide status color / tone framing** (HITL): Setting the status color sits at a checkpoint because it's easy to reverse but has a moderate blast radius and is only moderately verifiable, so the deciding factor is blast radius.
+5. **Commit a ship date** (Above): Committing a date sits above the line because it's hard to reverse and has a high blast radius, and is only moderately verifiable, so the deciding factor is blast radius.
+6. **Assess at-risk / escalation-likely** (HITL): Assessing risk sits at a checkpoint because it's easy to reverse and has a moderate blast radius, but is hard to verify, so the deciding factor is measurability.
+7. **Propose story batch within cap** (Below): Proposing a capped story batch sits below the line because it's easy to reverse, has a low blast radius, and is easy to verify, so the deciding factor is structural caps keeping all three axes safe.
 
-## The golden rule, applied
+## Hardest above-vs-below call
 
-_One sentence per above-the-line decision: why it stays human (which of reversibility / blast radius / measurability failed)._
-
-## Hardest call
-
-_Your toughest "above vs below" decision and how you resolved it. (Share this in `#cohort-channel`.)_
+#4 — status color / tone framing. It's the only row with no decisive trigger (High/Med/Med), so it sits right on the HITL/Above line — and the call rests on whether your reviewers actually scrutinize it or rubber-stamp it.
