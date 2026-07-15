@@ -44,9 +44,15 @@ MAX_ITERATIONS = int(os.environ.get("CORTEX_MAX_ITERATIONS", "8"))
 MAX_REVISIONS = int(os.environ.get("CORTEX_MAX_REVISIONS", "2"))
 COST_CAP_USD = float(os.environ.get("CORTEX_COST_CAP_USD", "0.50"))
 MAX_QUEUE_ITEMS = int(os.environ.get("CORTEX_MAX_QUEUE_ITEMS", "10"))
+# Stuck detector: if a required data pull keeps failing this many times, stop and
+# escalate instead of spinning (see loop-spec.md stop conditions).
+MAX_DATA_ATTEMPTS = int(os.environ.get("CORTEX_MAX_DATA_ATTEMPTS", "3"))
 # Rough $ per 1M tokens for your chosen model, set to match its pricing.
 PRICE_IN = float(os.environ.get("CORTEX_PRICE_IN_PER_M", "0.15"))
 PRICE_OUT = float(os.environ.get("CORTEX_PRICE_OUT_PER_M", "0.60"))
+
+# Tools that pull required project data; failures here count toward the stuck cap.
+DATA_TOOLS = {"get_project", "get_activity"}
 
 TOOL_SCHEMAS = [
     {"type": "function", "function": {
@@ -117,6 +123,7 @@ def run(which: str = "happy") -> None:
     ]
     source_log: list[str] = [task["body"]]
     revisions = 0
+    data_failures = 0  # required-data pulls that returned an error (stuck detector)
 
     for step in range(1, MAX_ITERATIONS + 1):
         if bounds.over_cap():
@@ -140,6 +147,14 @@ def run(which: str = "happy") -> None:
                 print(f"          -> {json.dumps(result)[:300]}")
                 messages.append({"role": "tool", "tool_call_id": call.id,
                                  "content": json.dumps(result)})
+                if fn in DATA_TOOLS and isinstance(result, dict) and "error" in result:
+                    data_failures += 1
+
+            if data_failures >= MAX_DATA_ATTEMPTS:
+                banner(f"STUCK, required data could not be pulled after "
+                       f"{data_failures} failed attempts (cap {MAX_DATA_ATTEMPTS}). "
+                       f"Halting and escalating to a human. Run cost ≈ ${bounds.cost:.4f}")
+                return
             continue
 
         # No tool calls => Cortex produced a proposed output. Validate it.
