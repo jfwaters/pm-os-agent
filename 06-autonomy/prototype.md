@@ -19,7 +19,7 @@ Real screenshots of *your* Cortex running. These are the `00-build/CORTEX-ANATOM
 
 | # | Screenshot | What it shows | From |
 |---|---|---|---|
-| 1 | _[img]_ | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
+| 1 | ![Cortex happy-path drafted update](M2-draft.png)<br>![Cortex happy-path step-by-step trace](M2-happy-path-trace.png) | happy-path run: the real drafted update (top) and the step-by-step trace ending at the HITL checkpoint (queued, not posted). Both included to show the output and the machinery, though only one is required. | M2 |
 | 2 | _[img]_ | the critic rejecting a bad draft (revise/block) | M3 |
 | 3 | _[img]_ | a grounded update citing pulled activity + a caught hallucination | M4 |
 | 4 | _[img]_ | jailbreak refused + escalated | M5 |
