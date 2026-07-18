@@ -21,7 +21,7 @@ This table is a contents list; the screenshots themselves are in the per-module 
 
 | # | Screenshot | What it shows | From |
 |---|---|---|---|
-| 1 | [view ↓](#m2-happy-path) | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
+| 1 | ![Drafted update](M2-draft.png)<br>![Step-by-step trace](M2-happy-path-trace.png)<br>[details ↓](#m2-happy-path) | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
 | 2 | _pending_ | the critic rejecting a bad draft (revise/block) | M3 |
 | 3 | _pending_ | a grounded update citing pulled activity + a caught hallucination | M4 |
 | 4 | _pending_ | jailbreak refused + escalated | M5 |
@@ -29,6 +29,8 @@ This table is a contents list; the screenshots themselves are in the per-module 
 | 6 | _pending_ | end-to-end run | M6 |
 
 ### M2: happy path
+
+[↑ back to contents](#screenshots-required-collected-m2-to-m6)
 
 The happy-path run for the weekly leadership status update (`task-happy`). Two views — only one is required, but both are included to show the *output* and the *machinery*.
 
