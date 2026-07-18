@@ -18,5 +18,5 @@ __pycache__/
 
 # Agent runtime artifacts you don't want public yet
 *.local.json
-/traces/
-/runs/
+traces/
+runs/

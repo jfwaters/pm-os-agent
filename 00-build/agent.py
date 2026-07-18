@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sys
+from pathlib import Path
 
 from openai import OpenAI
 
@@ -39,7 +41,7 @@ except ImportError:
     pass
 
 # --- Bounds (your M5 deliverable: tune these and justify them) ----------------
-MODEL = os.environ.get("CORTEX_MODEL", "gpt-4o-mini")
+MODEL = os.environ.get("CORTEX_MODEL", "gpt-4.1-mini")
 MAX_ITERATIONS = int(os.environ.get("CORTEX_MAX_ITERATIONS", "8"))
 MAX_REVISIONS = int(os.environ.get("CORTEX_MAX_REVISIONS", "2"))
 COST_CAP_USD = float(os.environ.get("CORTEX_COST_CAP_USD", "0.50"))
@@ -106,6 +108,40 @@ def banner(text: str) -> None:
     print(f"\n{'=' * 64}\n{text}\n{'=' * 64}")
 
 
+# --- Work tree (per-run isolated workspace, see loop-spec.md) ------------------
+RUNS_DIR = Path(__file__).parent / "runs"  # gitignored; scratch state per message
+
+
+def claim_work_tree(message_id: str, force: bool):
+    """Create the per-run work tree. Creating the dir IS the atomic claim: a second
+    fire of the same message_id hits FileExistsError and is deduped (returns None),
+    so Cortex never drafts the same task twice. Pass force=True to reclaim an existing
+    dir (handy for re-running a fixture)."""
+    run_dir = RUNS_DIR / message_id
+    if force and run_dir.exists():
+        shutil.rmtree(run_dir)
+    try:
+        run_dir.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        return None
+    (run_dir / "status").write_text("claimed\n")
+    return run_dir
+
+
+def finalize(run_dir, status: str, source_log, draft=None, verdict=None) -> None:
+    """Persist the run's artifacts to its work tree and stamp the final status
+    (claimed | done | escalated | stuck)."""
+    if run_dir is None:
+        return
+    (run_dir / "status").write_text(status + "\n")
+    (run_dir / "source_log.json").write_text(json.dumps(source_log, indent=2))
+    if draft is not None:
+        (run_dir / "draft.md").write_text(draft)
+    if verdict is not None:
+        clean = {k: v for k, v in verdict.items() if k != "_usage"}
+        (run_dir / "verdict.json").write_text(json.dumps(clean, indent=2))
+
+
 def run(which: str = "happy") -> None:
     client = OpenAI()
     bounds = Bounds()
@@ -125,10 +161,23 @@ def run(which: str = "happy") -> None:
     revisions = 0
     data_failures = 0  # required-data pulls that returned an error (stuck detector)
 
+    # Claim an isolated work tree keyed on the message id. Creating the dir is the
+    # atomic claim, so a duplicate fire of the same task is deduped (loop-spec.md).
+    message_id = f"task-{which}"
+    force = os.environ.get("CORTEX_FORCE_RERUN") == "1" or "--force" in sys.argv
+    run_dir = claim_work_tree(message_id, force)
+    if run_dir is None:
+        banner(f"DEDUPE, {message_id} already handled (runs/{message_id}/). Skipping "
+               f"to avoid a duplicate draft. Re-run with CORTEX_FORCE_RERUN=1.")
+        return
+    print(f"\n[work tree] runs/{message_id}/  (claimed)")
+
+    last_proposed = None  # newest draft, persisted even if the run ends unfinished
     for step in range(1, MAX_ITERATIONS + 1):
         if bounds.over_cap():
             banner(f"BOUND TRIPPED, cost cap ${COST_CAP_USD} hit at "
                    f"${bounds.cost:.4f}. Halting and escalating to a human.")
+            finalize(run_dir, "stuck", source_log, draft=last_proposed)
             return
 
         resp = client.chat.completions.create(
@@ -154,11 +203,13 @@ def run(which: str = "happy") -> None:
                 banner(f"STUCK, required data could not be pulled after "
                        f"{data_failures} failed attempts (cap {MAX_DATA_ATTEMPTS}). "
                        f"Halting and escalating to a human. Run cost ≈ ${bounds.cost:.4f}")
+                finalize(run_dir, "stuck", source_log, draft=last_proposed)
                 return
             continue
 
         # No tool calls => Cortex produced a proposed output. Validate it.
         proposed = msg.content or ""
+        last_proposed = proposed
         print(f"\n[step {step}] PROPOSED OUTPUT:\n{proposed}")
 
         banner("CRITIC, independent validation")
@@ -169,14 +220,17 @@ def run(which: str = "happy") -> None:
         print(json.dumps({k: v for k, v in verdict.items() if k != "_usage"}, indent=2))
 
         if verdict["verdict"] == "pass":
+            status = "escalated" if proposed.strip().startswith("ESCALATE") else "done"
             banner(f"HITL CHECKPOINT, status update + any proposed stories queued for "
                    f"your review. Nothing posted, no commitments made. "
                    f"Run cost ≈ ${bounds.cost:.4f}")
+            finalize(run_dir, status, source_log, draft=proposed, verdict=verdict)
             return
 
         if revisions >= MAX_REVISIONS:
             banner(f"REVISION CAP hit ({MAX_REVISIONS}). Escalating to a human "
                    f"instead of looping. Run cost ≈ ${bounds.cost:.4f}")
+            finalize(run_dir, "escalated", source_log, draft=proposed, verdict=verdict)
             return
 
         revisions += 1
@@ -188,7 +242,9 @@ def run(which: str = "happy") -> None:
 
     banner(f"MAX ITERATIONS ({MAX_ITERATIONS}) reached without finishing. "
            f"Escalating. Run cost ≈ ${bounds.cost:.4f}")
+    finalize(run_dir, "stuck", source_log, draft=last_proposed)
 
 
 if __name__ == "__main__":
-    run(sys.argv[1] if len(sys.argv) > 1 else "happy")
+    fixtures = [a for a in sys.argv[1:] if not a.startswith("-")]  # ignore flags
+    run(fixtures[0] if fixtures else "happy")
