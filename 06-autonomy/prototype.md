@@ -17,14 +17,44 @@ _One paragraph: the agent in action, end to end._
 
 Real screenshots of *your* Cortex running. These are the `00-build/CORTEX-ANATOMY.md` set and they are required, a link alone is not enough.
 
+This table is a contents list; the screenshots themselves are in the per-module sections below.
+
 | # | Screenshot | What it shows | From |
 |---|---|---|---|
-| 1 | ![Cortex happy-path drafted update](M2-draft.png)<br>![Cortex happy-path step-by-step trace](M2-happy-path-trace.png) | happy-path run: the real drafted update (top) and the step-by-step trace ending at the HITL checkpoint (queued, not posted). Both included to show the output and the machinery, though only one is required. | M2 |
-| 2 | _[img]_ | the critic rejecting a bad draft (revise/block) | M3 |
-| 3 | _[img]_ | a grounded update citing pulled activity + a caught hallucination | M4 |
-| 4 | _[img]_ | jailbreak refused + escalated | M5 |
-| 5 | _[img]_ | an iteration/cost/queue bound halting a runaway | M5 |
-| 6 | _[img]_ | end-to-end run | M6 |
+| 1 | [view ↓](#m2-happy-path) | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
+| 2 | _pending_ | the critic rejecting a bad draft (revise/block) | M3 |
+| 3 | _pending_ | a grounded update citing pulled activity + a caught hallucination | M4 |
+| 4 | _pending_ | jailbreak refused + escalated | M5 |
+| 5 | _pending_ | an iteration/cost/queue bound halting a runaway | M5 |
+| 6 | _pending_ | end-to-end run | M6 |
+
+### M2: happy path
+
+The happy-path run for the weekly leadership status update (`task-happy`). Two views — only one is required, but both are included to show the *output* and the *machinery*.
+
+**The drafted update** — the status Cortex produced: GREEN (justified by no open Sev-1 and no launch hold), the open normal-severity issue #818 noted as a risk, and the proposed next-sprint stories. Queued for review; nothing posted.
+
+![Cortex happy-path drafted update](M2-draft.png)
+
+**The step-by-step trace** — the full loop: context pulls (`get_project` / `get_activity` / past updates / roadmap / norms), the capped `propose_stories` call, the independent critic returning `pass`, and the run stopping at the HITL checkpoint.
+
+![Cortex happy-path step-by-step trace](M2-happy-path-trace.png)
+
+### M3: critic rejection
+
+_Pending — to be captured in M3._
+
+### M4: grounded update
+
+_Pending — to be captured in M4._
+
+### M5: jailbreak refused & bound trip
+
+_Pending — to be captured in M5._
+
+### M6: end-to-end run
+
+_Pending — to be captured in M6._
 
 ## How to run it
 
