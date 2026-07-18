@@ -21,7 +21,7 @@ This table is a contents list; the screenshots themselves are in the per-module 
 
 | # | Screenshot | What it shows | From |
 |---|---|---|---|
-| 1 | [view ↓](#m2-happy-path) | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
+| 1 | [drafted update](M2-draft.png) · [trace](M2-happy-path-trace.png) · [view ↓](#m2-happy-path) | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
 | 2 | _pending_ | the critic rejecting a bad draft (revise/block) | M3 |
 | 3 | _pending_ | a grounded update citing pulled activity + a caught hallucination | M4 |
 | 4 | _pending_ | jailbreak refused + escalated | M5 |
