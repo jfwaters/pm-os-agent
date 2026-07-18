@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -128,6 +129,21 @@ def claim_work_tree(message_id: str, force: bool):
     return run_dir
 
 
+def clean_draft(text: str) -> str:
+    """Tidy the drafted output for saving: drop the leading DONE:/ESCALATE: marker and
+    cut an accidentally repeated body (the drafter occasionally emits the update twice)."""
+    t = text.strip()
+    for marker in ("DONE:", "ESCALATE:"):
+        if t[:len(marker)].upper() == marker:
+            body = t[len(marker):]
+            repeat = re.search(r"\n\s*" + re.escape(marker), body, re.IGNORECASE)
+            if repeat:  # model restarted the whole message; keep only the first copy
+                body = body[:repeat.start()]
+            t = body.strip()
+            break
+    return t + "\n"
+
+
 def finalize(run_dir, status: str, source_log, draft=None, verdict=None) -> None:
     """Persist the run's artifacts to its work tree and stamp the final status
     (claimed | done | escalated | stuck)."""
@@ -136,7 +152,7 @@ def finalize(run_dir, status: str, source_log, draft=None, verdict=None) -> None
     (run_dir / "status").write_text(status + "\n")
     (run_dir / "source_log.json").write_text(json.dumps(source_log, indent=2))
     if draft is not None:
-        (run_dir / "draft.md").write_text(draft)
+        (run_dir / "draft.md").write_text(clean_draft(draft))
     if verdict is not None:
         clean = {k: v for k, v in verdict.items() if k != "_usage"}
         (run_dir / "verdict.json").write_text(json.dumps(clean, indent=2))
