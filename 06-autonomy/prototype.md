@@ -21,7 +21,7 @@ This table is a contents list; the screenshots themselves are in the per-module 
 
 | # | Screenshot | What it shows | From |
 |---|---|---|---|
-| 1 | ![Drafted update](M2-draft.png)<br>![Step-by-step trace](M2-happy-path-trace.png)<br>[details ↓](#m2-happy-path) | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
+| 1 | [view ↓](#m2-happy-path) | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
 | 2 | _pending_ | the critic rejecting a bad draft (revise/block) | M3 |
 | 3 | _pending_ | a grounded update citing pulled activity + a caught hallucination | M4 |
 | 4 | _pending_ | jailbreak refused + escalated | M5 |
@@ -36,11 +36,11 @@ The happy-path run for the weekly leadership status update (`task-happy`). Two v
 
 **The drafted update** — the status Cortex produced: GREEN (justified by no open Sev-1 and no launch hold), the open normal-severity issue #818 noted as a risk, and the proposed next-sprint stories. Queued for review; nothing posted.
 
-![Cortex happy-path drafted update](M2-draft.png)
+<img src="M2-draft.png" alt="Cortex happy-path drafted update" width="800">
 
 **The step-by-step trace** — the full loop: context pulls (`get_project` / `get_activity` / past updates / roadmap / norms), the capped `propose_stories` call, the independent critic returning `pass`, and the run stopping at the HITL checkpoint.
 
-![Cortex happy-path step-by-step trace](M2-happy-path-trace.png)
+<img src="M2-happy-path-trace.png" alt="Cortex happy-path step-by-step trace" width="800">
 
 ### M3: critic rejection
 
