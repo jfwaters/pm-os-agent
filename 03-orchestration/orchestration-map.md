@@ -39,7 +39,7 @@
 | Agent / subagent | Responsibility | Runs which Loop Spec |
 |---|---|---|
 | Cortex | Pulls project context, drafts the status update, sets the status color, and preps the capped story proposal | M2 hook loop (`02-loop-design/loop-spec.md`) |
-| Validator (critic) | Independently checks Cortex's output against the Field 5 checks and returns a verdict | Short goal loop: check → pass/fail → stop |
+| Validator (critic) | Independently checks Cortex's output against the Field 5 checks and returns a verdict | No loop of its own — a single-shot, stateless evaluation (one call → pass/fail). The revise-until-pass loop lives in Cortex's M2 loop, which calls it once per iteration. |
 
 ## 4. Communication & hand-offs
 
