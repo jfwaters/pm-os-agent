@@ -26,8 +26,8 @@
       │             (project, activity, past updates, roadmap, norms)
       │  drafts update / preps capped story batch
       ▼
-[Validator] ──fail──> back to Cortex (max 2 revisions, then escalate to PM)
-      │
+[Validator] ──fail──> back to Cortex
+      │                 (max 2 revisions, then escalate to PM)
       │ pass
       ▼
 [PM review checkpoint] ──> PM sends / approves
