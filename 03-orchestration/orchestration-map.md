@@ -19,20 +19,19 @@
 **Pattern:** single + subagent (validator)
 
 ```
-[Inbound PM task]  ──(hook; 9am cron backup)──┐
-                                              │
-                                              ▼
-                                         [Cortex]  ──(reads)──> internal data tools
-                                              │                 (project, activity, past
-                                              │                  updates, roadmap, norms)
-                                              │  drafts update / preps capped story batch
-                                              ▼
-                                        [Validator]  ── fail ──> back to Cortex
-                                              │                  (max 2 revisions,
-                                              │ pass              then escalate to PM)
-                                              ▼
-                                   [PM review checkpoint]  → PM sends / approves
-                                        (nothing posted or committed above this line)
+[Inbound PM task]              (hook; 9am cron backup)
+      │
+      ▼
+[Cortex] ──reads──> internal data tools
+      │             (project, activity, past updates, roadmap, norms)
+      │  drafts update / preps capped story batch
+      ▼
+[Validator] ──fail──> back to Cortex (max 2 revisions, then escalate to PM)
+      │
+      │ pass
+      ▼
+[PM review checkpoint] ──> PM sends / approves
+      (nothing posted or committed above this line)
 ```
 
 ## 3. Roster
