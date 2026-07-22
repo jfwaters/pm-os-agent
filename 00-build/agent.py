@@ -57,6 +57,11 @@ PRICE_OUT = float(os.environ.get("CORTEX_PRICE_OUT_PER_M", "0.60"))
 # Tools that pull required project data; failures here count toward the stuck cap.
 DATA_TOOLS = {"get_project", "get_activity"}
 
+# Retrieval-quality probe: names in CORTEX_WITHHOLD (comma-separated) are made to
+# return "source_unavailable" instead of real data, so you can check that a grounded
+# Cortex refuses/escalates rather than inventing. Empty by default = normal run.
+WITHHELD = {t.strip() for t in os.environ.get("CORTEX_WITHHOLD", "").split(",") if t.strip()}
+
 TOOL_SCHEMAS = [
     {"type": "function", "function": {
         "name": "get_project", "description": "Look up a project by its ID (status, flags, linked PRD).",
@@ -206,7 +211,12 @@ def run(which: str = "happy") -> None:
             for call in msg.tool_calls:
                 fn = call.function.name
                 args = json.loads(call.function.arguments or "{}")
-                result = tools.TOOLS[fn](**args)
+                if fn in WITHHELD:  # retrieval-quality probe: source made unavailable
+                    result = {"error": "source_unavailable", "tool": fn,
+                              "hint": "this source is withheld this run; do not invent "
+                                      "its data, escalate if the task needs it"}
+                else:
+                    result = tools.TOOLS[fn](**args)
                 source_log.append(f"{fn}({args}) -> {json.dumps(result)}")
                 print(f"\n[step {step}] TOOL {fn}({args})")
                 print(f"          -> {json.dumps(result)[:300]}")
