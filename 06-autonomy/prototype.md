@@ -22,7 +22,7 @@ This table is a contents list; the screenshots themselves are in the per-module 
 | # | Screenshot | What it shows | From |
 |---|---|---|---|
 | 1 | [drafted update](M2-draft.png) · [trace](M2-happy-path-trace.png) · [view ↓](#m2-happy-path) | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
-| 2 | [critic rejection](M3-critic.png) · [view ↓](#m3-critic-rejection) | the critic rejecting a bad draft (revise/block) | M3 |
+| 2 | [full trace](M3-critic-terminal.png) · [verdict](M3-critic.png) · [view ↓](#m3-critic-rejection) | the critic rejecting a bad draft (revise/block) | M3 |
 | 3 | _pending_ | a grounded update citing pulled activity + a caught hallucination | M4 |
 | 4 | _pending_ | jailbreak refused + escalated | M5 |
 | 5 | _pending_ | an iteration/cost/queue bound halting a runaway | M5 |
@@ -46,11 +46,15 @@ The happy-path run for the weekly leadership status update (`task-happy`). Two v
 
 [↑ back to contents](#screenshots-required-collected-m2-to-m6)
 
-The independent critic validating a deliberately bad draft against the real pulled data (`demo_reject.py`). The draft is seeded to violate several Field 5 checks at once; the critic — which never saw the drafting context — blocks it before a human sees it.
+The independent critic validating a deliberately bad draft against the real pulled data (`demo_reject.py`). The draft is seeded to violate several Field 5 checks at once; the critic — which never saw the drafting context — blocks it before a human sees it. Two views are included.
 
-**The rejection** — the critic returns `fail`, naming each violated check: invented metrics and an invented PR id (`INVENTED_DATA`), a committed GA date (`AGENT_LINE_VIOLATION`), a confidential Orbit leak (`CONFIDENTIAL_LEAK`), and an over-cap story batch (`QUEUE_CAP_EXCEEDED`). The draft is blocked — it returns to Cortex for revision (max 2), then escalates instead of looping. Nothing posted, nothing committed.
+**The step-by-step trace** — the full run: the inbound task, the real context pulls (`get_project` / `get_activity` / `get_roadmap` / `get_norms`), the seeded bad draft as the proposed output, and the critic blocking it.
 
-<img src="M3-critic.png" alt="Cortex critic rejecting a bad draft" width="800">
+<img src="M3-critic-terminal.png" alt="Cortex critic rejection full step-by-step trace" width="800">
+
+**The rejection verdict** — the critic returns `fail`, naming each violated check: invented metrics and an invented PR id (`INVENTED_DATA` / `WRONG_PROJECT_OR_ID`), a committed GA date (`AGENT_LINE_VIOLATION`), a confidential Orbit leak (`CONFIDENTIAL_LEAK`), and an over-cap story batch (`QUEUE_CAP_EXCEEDED`). The draft is blocked — it returns to Cortex for revision (max 2), then escalates instead of looping. Nothing posted, nothing committed.
+
+<img src="M3-critic.png" alt="Cortex critic rejection verdict" width="800">
 
 ### M4: grounded update
 
