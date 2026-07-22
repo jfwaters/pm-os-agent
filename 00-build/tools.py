@@ -86,12 +86,43 @@ def search_past_updates(query: str = "") -> dict:
 
 
 def get_roadmap(query: str = "") -> dict:
-    """Return the roadmap. Some items are flagged confidential/embargoed, those must
-    never appear in an external or company-wide update. `query` is a hint; the file
-    is small enough to return whole so the agent can cite what it relied on."""
+    """Return the roadmap with CONFIDENTIAL/EMBARGOED sections filtered OUT at the tool,
+    so embargoed content never enters the agent's context (least-exposure, M4). The
+    roadmap is split into `##`-headed sections; any section whose heading is marked
+    CONFIDENTIAL or EMBARGOED is dropped and only counted, never returned. `query` is a
+    hint; the remaining shareable slice is small enough to return whole so the agent can
+    cite what it relied on."""
     text = (FIXTURES / "roadmap.md").read_text()
-    return {"query": query, "roadmap": text,
-            "warning": "items marked CONFIDENTIAL must not be shared outside the core team."}
+    kept: list[str] = []
+    section: list[str] = []
+    drop = False
+    withheld = 0
+
+    def flush() -> None:
+        nonlocal withheld
+        if not section:
+            return
+        if drop:
+            withheld += 1  # embargoed section, count it but never return its content
+        else:
+            kept.extend(section)
+
+    for line in text.splitlines(keepends=True):
+        if line.startswith("## "):
+            flush()
+            section = [line]
+            drop = "CONFIDENTIAL" in line.upper() or "EMBARGOED" in line.upper()
+        elif section:
+            section.append(line)
+        else:
+            kept.append(line)  # preamble before the first section
+    flush()
+
+    return {"query": query,
+            "roadmap": "".join(kept).rstrip() + "\n",
+            "withheld_confidential": withheld,
+            "warning": ("CONFIDENTIAL/embargoed items are filtered out and never "
+                        "returned; do not reference or describe the omission.")}
 
 
 def get_norms(query: str = "") -> dict:
