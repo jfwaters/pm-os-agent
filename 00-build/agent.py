@@ -47,6 +47,8 @@ MODEL = os.environ.get("CORTEX_MODEL", "gpt-4.1-mini")
 MAX_ITERATIONS = int(os.environ.get("CORTEX_MAX_ITERATIONS", "8"))
 MAX_REVISIONS = int(os.environ.get("CORTEX_MAX_REVISIONS", "2"))
 COST_CAP_USD = float(os.environ.get("CORTEX_COST_CAP_USD", "0.50"))
+# Daily spend cap across ALL runs (enforced via a dated ledger, outside any one run).
+DAILY_COST_CAP_USD = float(os.environ.get("CORTEX_DAILY_COST_CAP_USD", "20"))
 MAX_QUEUE_ITEMS = int(os.environ.get("CORTEX_MAX_QUEUE_ITEMS", "10"))
 # Stuck detector: if a required data pull keeps failing this many times, stop and
 # escalate instead of spinning (see loop-spec.md stop conditions).
@@ -128,6 +130,33 @@ def kill_switch_engaged() -> bool:
 
 # --- Work tree (per-run isolated workspace, see loop-spec.md) ------------------
 RUNS_DIR = Path(__file__).parent / "runs"  # gitignored; scratch state per message
+LEDGER = RUNS_DIR / "daily-spend.json"  # cross-run daily spend, keyed by date
+
+
+def _today() -> str:
+    return time.strftime("%Y-%m-%d")
+
+
+def daily_spend_today() -> float:
+    """Total spend recorded for today across all runs (0 if none/unreadable)."""
+    try:
+        return float(json.loads(LEDGER.read_text()).get(_today(), 0.0))
+    except (FileNotFoundError, json.JSONDecodeError, ValueError, TypeError):
+        return 0.0
+
+
+def record_spend(cost: float) -> None:
+    """Add this run's cost to today's total in the daily ledger. Not concurrency-safe
+    (simple read-modify-write); fine for the single-run cadence here."""
+    if cost <= 0:
+        return
+    try:
+        ledger = json.loads(LEDGER.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        ledger = {}
+    ledger[_today()] = round(float(ledger.get(_today(), 0.0)) + cost, 6)
+    LEDGER.parent.mkdir(parents=True, exist_ok=True)
+    LEDGER.write_text(json.dumps(ledger, indent=2))
 
 
 def claim_work_tree(message_id: str, force: bool):
@@ -161,9 +190,11 @@ def clean_draft(text: str) -> str:
     return t + "\n"
 
 
-def finalize(run_dir, status: str, source_log, draft=None, verdict=None) -> None:
-    """Persist the run's artifacts to its work tree and stamp the final status
-    (claimed | done | escalated | stuck)."""
+def finalize(run_dir, status: str, source_log, draft=None, verdict=None,
+             cost: float = 0.0) -> None:
+    """Persist the run's artifacts to its work tree, record its spend to the daily
+    ledger, and stamp the final status (claimed | done | escalated | stuck | halted)."""
+    record_spend(cost)  # every terminal path calls finalize, so spend is logged once
     if run_dir is None:
         return
     (run_dir / "status").write_text(status + "\n")
@@ -181,6 +212,12 @@ def run(which: str = "happy") -> None:
     task = tools.get_task(which)
     if "error" in task:
         print(task)
+        return
+
+    if daily_spend_today() >= DAILY_COST_CAP_USD:
+        banner(f"DAILY COST CAP, ${DAILY_COST_CAP_USD:.2f}/day already reached "
+               f"(${daily_spend_today():.4f} spent today). Not starting this run; wait "
+               f"for tomorrow or raise CORTEX_DAILY_COST_CAP_USD.")
         return
 
     banner(f"CORTEX RUN, fixture: task-{which}  (auto-queue cap {MAX_QUEUE_ITEMS} items)")
@@ -211,20 +248,26 @@ def run(which: str = "happy") -> None:
         if kill_switch_engaged():
             banner("KILL SWITCH engaged. Halting and escalating to a human. "
                    "Nothing posted, nothing committed.")
-            finalize(run_dir, "halted", source_log, draft=last_proposed)
+            finalize(run_dir, "halted", source_log, draft=last_proposed, cost=bounds.cost)
             return
 
         elapsed = time.monotonic() - run_start
         if elapsed > RUN_TIMEOUT_S:
             banner(f"TIMEOUT, run exceeded {RUN_TIMEOUT_S:.0f}s (at {elapsed:.0f}s). "
                    f"Halting and escalating to a human.")
-            finalize(run_dir, "stuck", source_log, draft=last_proposed)
+            finalize(run_dir, "stuck", source_log, draft=last_proposed, cost=bounds.cost)
             return
 
         if bounds.over_cap():
             banner(f"BOUND TRIPPED, cost cap ${COST_CAP_USD} hit at "
                    f"${bounds.cost:.4f}. Halting and escalating to a human.")
-            finalize(run_dir, "stuck", source_log, draft=last_proposed)
+            finalize(run_dir, "stuck", source_log, draft=last_proposed, cost=bounds.cost)
+            return
+
+        if daily_spend_today() + bounds.cost >= DAILY_COST_CAP_USD:
+            banner(f"DAILY COST CAP, ${DAILY_COST_CAP_USD:.2f}/day reached mid-run "
+                   f"(${daily_spend_today() + bounds.cost:.4f}). Halting and escalating.")
+            finalize(run_dir, "stuck", source_log, draft=last_proposed, cost=bounds.cost)
             return
 
         try:
@@ -234,7 +277,7 @@ def run(which: str = "happy") -> None:
         except APITimeoutError:
             banner(f"TIMEOUT, model call exceeded {CALL_TIMEOUT_S:.0f}s. "
                    f"Halting and escalating to a human.")
-            finalize(run_dir, "stuck", source_log, draft=last_proposed)
+            finalize(run_dir, "stuck", source_log, draft=last_proposed, cost=bounds.cost)
             return
         bounds.add(resp.usage)
         msg = resp.choices[0].message
@@ -262,7 +305,7 @@ def run(which: str = "happy") -> None:
                 banner(f"STUCK, required data could not be pulled after "
                        f"{data_failures} failed attempts (cap {MAX_DATA_ATTEMPTS}). "
                        f"Halting and escalating to a human. Run cost ≈ ${bounds.cost:.4f}")
-                finalize(run_dir, "stuck", source_log, draft=last_proposed)
+                finalize(run_dir, "stuck", source_log, draft=last_proposed, cost=bounds.cost)
                 return
             continue
 
@@ -283,13 +326,15 @@ def run(which: str = "happy") -> None:
             banner(f"HITL CHECKPOINT, status update + any proposed stories queued for "
                    f"your review. Nothing posted, no commitments made. "
                    f"Run cost ≈ ${bounds.cost:.4f}")
-            finalize(run_dir, status, source_log, draft=proposed, verdict=verdict)
+            finalize(run_dir, status, source_log, draft=proposed, verdict=verdict,
+                     cost=bounds.cost)
             return
 
         if revisions >= MAX_REVISIONS:
             banner(f"REVISION CAP hit ({MAX_REVISIONS}). Escalating to a human "
                    f"instead of looping. Run cost ≈ ${bounds.cost:.4f}")
-            finalize(run_dir, "escalated", source_log, draft=proposed, verdict=verdict)
+            finalize(run_dir, "escalated", source_log, draft=proposed, verdict=verdict,
+                     cost=bounds.cost)
             return
 
         revisions += 1
@@ -301,7 +346,7 @@ def run(which: str = "happy") -> None:
 
     banner(f"MAX ITERATIONS ({MAX_ITERATIONS}) reached without finishing. "
            f"Escalating. Run cost ≈ ${bounds.cost:.4f}")
-    finalize(run_dir, "stuck", source_log, draft=last_proposed)
+    finalize(run_dir, "stuck", source_log, draft=last_proposed, cost=bounds.cost)
 
 
 if __name__ == "__main__":
