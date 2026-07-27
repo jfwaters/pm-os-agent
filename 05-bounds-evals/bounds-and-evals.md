@@ -69,4 +69,12 @@ The best fixtures are the worst runs: the **near-miss** is the one that almost s
 
 ## Runaway-loop check
 
-_Describe one runaway scenario and the exact bound that stops it._
+**Scenario.** The status-color call (agent-line #4) is genuinely ambiguous — Cortex drafts "Green," the critic rejects it, Cortex over-corrects to "Yellow," the critic rejects *that*, and the drafter↔critic pair keeps bouncing without converging. Left unbounded, this loops forever, one model call per pass, quietly burning tokens on a thread that will never settle on its own. (We watched exactly this happen on the happy path before the status-color rule was tightened.)
+
+**The exact bound that stops it.** The **revision cap** (`CORTEX_MAX_REVISIONS = 2`), enforced outside the model in `agent.py`: after two rejected revisions the loop stops bouncing and **escalates to a human** instead of trying a third time. The **max-iterations cap (8)** sits behind it as a second backstop, and the **per-run cost cap ($0.50)** behind that — so even if one guard were mis-set, the run still halts and escalates rather than spinning. All three fail safe: a halted run posts and commits nothing.
+
+## Reflection
+
+Two things this exercise made concrete. First, **most of Cortex's "pass" conditions are stops, not answers** — refuse, escalate, halt. The bounds aren't a safety afterthought bolted onto the agent; they *are* the behavior, because the agent line is only real once a number enforces it. Second, writing the bounds table exposed the **paper-vs-enforced gap**: five bounds are live in code, four (timeout, daily cost cap, kill switch, JIT tokens) are still policy — and naming that gap honestly is more useful than pretending the table is the build.
+
+**Which cap I'd tune next.** The **revision cap (2)** — and specifically I'd instrument *why* it trips before changing its value. Right now a trip is ambiguous: it fires both when Cortex genuinely can't ground an answer (good — escalate) and when the *critic* is being miscalibrated (bad — a false rejection loop, which is what the weak `gpt-4o-mini` judge caused earlier). Before touching the number, I'd log the rejection reasons on each revision so we can tell "legitimately stuck" from "critic thrashing." If most trips turn out to be the latter, the fix is the judge, not the cap. The cap's *job* — stop the bounce, fail safe — is already correct; what needs tuning is our ability to read *why* it fired.
