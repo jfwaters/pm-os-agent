@@ -6,22 +6,36 @@ The revision cap that stops a critic<->drafter loop lives in `agent.py`.
 from __future__ import annotations
 
 import json
+import os
+
+from openai import APITimeoutError
 
 from prompts import CRITIC_SYSTEM
 
+# Per-call timeout bound (M5), shared default with agent.py's CALL_TIMEOUT_S.
+CALL_TIMEOUT_S = float(os.environ.get("CORTEX_CALL_TIMEOUT_S", "15"))
+
 
 def review(client, model: str, proposed_output: str, source_data: str) -> dict:
-    """Return {"verdict": "pass"|"fail", "reasons": [...]} for a proposed output."""
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": CRITIC_SYSTEM},
-            {"role": "user", "content":
-                f"SOURCE DATA Cortex used:\n{source_data}\n\n"
-                f"CORTEX PROPOSED OUTPUT:\n{proposed_output}"},
-        ],
-        response_format={"type": "json_object"},
-    )
+    """Return {"verdict": "pass"|"fail", "reasons": [...]} for a proposed output.
+
+    On a critic-call timeout, fail closed: a draft that could not be validated must
+    not advance to the human (the loop treats a fail as a revision, then escalates)."""
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": CRITIC_SYSTEM},
+                {"role": "user", "content":
+                    f"SOURCE DATA Cortex used:\n{source_data}\n\n"
+                    f"CORTEX PROPOSED OUTPUT:\n{proposed_output}"},
+            ],
+            response_format={"type": "json_object"},
+            timeout=CALL_TIMEOUT_S,
+        )
+    except APITimeoutError:
+        return {"verdict": "fail", "reasons": ["critic call timed out; failing closed"],
+                "_usage": {"prompt": 0, "completion": 0}}
     usage = resp.usage
     try:
         verdict = json.loads(resp.choices[0].message.content)

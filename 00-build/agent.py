@@ -26,9 +26,10 @@ import os
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
 
-from openai import OpenAI
+from openai import APITimeoutError, OpenAI
 
 import tools
 from critic import review
@@ -50,6 +51,10 @@ MAX_QUEUE_ITEMS = int(os.environ.get("CORTEX_MAX_QUEUE_ITEMS", "10"))
 # Stuck detector: if a required data pull keeps failing this many times, stop and
 # escalate instead of spinning (see loop-spec.md stop conditions).
 MAX_DATA_ATTEMPTS = int(os.environ.get("CORTEX_MAX_DATA_ATTEMPTS", "3"))
+# Timeout bound: a per-run wall-clock cap (checked between iterations) and a per-model-
+# call cap (so one hung call can't outlast the run cap). Then abort + escalate.
+RUN_TIMEOUT_S = float(os.environ.get("CORTEX_RUN_TIMEOUT_S", "90"))
+CALL_TIMEOUT_S = float(os.environ.get("CORTEX_CALL_TIMEOUT_S", "15"))
 # Rough $ per 1M tokens for your chosen model, set to match its pricing.
 PRICE_IN = float(os.environ.get("CORTEX_PRICE_IN_PER_M", "0.15"))
 PRICE_OUT = float(os.environ.get("CORTEX_PRICE_OUT_PER_M", "0.60"))
@@ -112,6 +117,13 @@ class Bounds:
 
 def banner(text: str) -> None:
     print(f"\n{'=' * 64}\n{text}\n{'=' * 64}")
+
+
+def kill_switch_engaged() -> bool:
+    """Kill switch (M5): one control halts every run. Trips on CORTEX_HALT=1 or a HALT
+    file next to agent.py. Rollback is inherent, Cortex only queues, never commits."""
+    return (os.environ.get("CORTEX_HALT") == "1"
+            or (Path(__file__).parent / "HALT").exists())
 
 
 # --- Work tree (per-run isolated workspace, see loop-spec.md) ------------------
@@ -194,15 +206,36 @@ def run(which: str = "happy") -> None:
     print(f"\n[work tree] runs/{message_id}/  (claimed)")
 
     last_proposed = None  # newest draft, persisted even if the run ends unfinished
+    run_start = time.monotonic()
     for step in range(1, MAX_ITERATIONS + 1):
+        if kill_switch_engaged():
+            banner("KILL SWITCH engaged. Halting and escalating to a human. "
+                   "Nothing posted, nothing committed.")
+            finalize(run_dir, "halted", source_log, draft=last_proposed)
+            return
+
+        elapsed = time.monotonic() - run_start
+        if elapsed > RUN_TIMEOUT_S:
+            banner(f"TIMEOUT, run exceeded {RUN_TIMEOUT_S:.0f}s (at {elapsed:.0f}s). "
+                   f"Halting and escalating to a human.")
+            finalize(run_dir, "stuck", source_log, draft=last_proposed)
+            return
+
         if bounds.over_cap():
             banner(f"BOUND TRIPPED, cost cap ${COST_CAP_USD} hit at "
                    f"${bounds.cost:.4f}. Halting and escalating to a human.")
             finalize(run_dir, "stuck", source_log, draft=last_proposed)
             return
 
-        resp = client.chat.completions.create(
-            model=MODEL, messages=messages, tools=TOOL_SCHEMAS)
+        try:
+            resp = client.chat.completions.create(
+                model=MODEL, messages=messages, tools=TOOL_SCHEMAS,
+                timeout=CALL_TIMEOUT_S)
+        except APITimeoutError:
+            banner(f"TIMEOUT, model call exceeded {CALL_TIMEOUT_S:.0f}s. "
+                   f"Halting and escalating to a human.")
+            finalize(run_dir, "stuck", source_log, draft=last_proposed)
+            return
         bounds.add(resp.usage)
         msg = resp.choices[0].message
 

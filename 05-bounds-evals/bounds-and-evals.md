@@ -9,14 +9,14 @@
 | Bound | Value / policy | Which Cortex risk it caps | Enforced in code? |
 |---|---|---|---|
 | **Max iterations** | 8 per run, then stop + escalate. Sub-caps: 2 critic↔drafter revisions, 3 failed data-pull attempts | A reasoning loop or critic↔drafter bounce spinning forever on a stuck thread | ✅ yes |
-| **Timeout** | 90s wall-clock per run; 15s per individual model/tool call, then abort + escalate | A hung tool call or stalled model call freezing the whole run | ⚠ paper |
+| **Timeout** | 90s wall-clock per run (checked between iterations); 15s per model call, then abort + escalate | A hung tool call or stalled model call freezing the whole run | ✅ yes |
 | **Token / cost budget** | $0.50 hard cap per run (enforced in-loop); $20/day account hard cap; plus a provider-dashboard spend limit as the outer backstop | An overnight runaway bill from a loop or a hook-fire storm | ⚠ per-run ✅ / daily paper |
 | **Auto-queue / commitment cap** | Max 10 stories per run; an over-cap batch is rejected + escalated, never split to dodge the cap | Flooding the backlog / auto-committing a flood of scope | ✅ yes |
 | **Permissions (JIT / ephemeral)** | No standing write access. `propose_stories` only queues. On PM approval at the HITL checkpoint, mint a single-use token scoped to that exact batch + project, expiring on use | Misused or leaked standing write access | ⚠ paper (queues only; no token minted yet) |
-| **Kill switch** | A single `CORTEX_HALT` flag checked at run-claim and every iteration; halts in ≤1 iteration. Rollback is inherent — Cortex only queues, never commits | A misbehaving or compromised agent you can't stop | ⚠ paper |
+| **Kill switch** | A single control (`CORTEX_HALT=1` or a `HALT` file) checked at the top of every iteration; halts in ≤1 iteration. Rollback is inherent — Cortex only queues, never commits | A misbehaving or compromised agent you can't stop | ✅ yes |
 | **HITL checkpoints** | Nothing reaches the PM without a critic pass (draft, status color, risk call); nothing enters the tracker without human approval of the queued batch; ship dates are human-authored only | Acting above the agent line without a human | ✅ yes |
 
-> **Mind the gap:** every above-the-line item in the M1 map has a checkpoint, so there is no *decision* gap. But the agent line is only real once enforced: max-iterations, revisions, data-pull attempts, per-run cost cap, and the queue cap are enforced in code today; the **timeout**, **$20/day cap**, **kill switch**, and **JIT single-use tokens** are specified but not yet implemented.
+> **Mind the gap:** every above-the-line item in the M1 map has a checkpoint, so there is no *decision* gap. But the agent line is only real once enforced: max-iterations, revisions, data-pull attempts, per-run cost cap, the queue cap, the **timeout**, and the **kill switch** are enforced in code today; only the **$20/day cap** (needs a cross-run daily spend ledger) and **JIT single-use tokens** (need a real write backend to authorize against) remain specified-but-not-implemented.
 
 **Defending the numbers in review:** *90s timeout* — a legit run is ~2–10s; even a worst-case 8-iteration run with a critic call each pass tops out ~30–60s, so 90s is headroom (cross it and something's hung, not slow). *$20/day* — a real run is ~$0.01 on gpt-4.1-mini and a busy portfolio is ~50 runs/day (~$0.50/day typical), so $20 is ~40× typical: invisible in normal use, but it catches a stuck-loop or hook storm before it's expensive.
 
