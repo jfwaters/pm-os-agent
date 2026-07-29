@@ -4,14 +4,14 @@
 
 ## What it does
 
-_One paragraph: the agent in action, end to end._
+Cortex is a PM chief-of-staff agent. Given one inbound PM task (e.g. "assemble this week's leadership status update for Northstar"), it pulls the project's real context — status, recent engineering activity, past-update precedent, the roadmap, and the team norms — drafts a status update grounded in that pulled data, sets an evidence-based status color, and proposes a capped batch of next-sprint stories. An independent critic (a separate model call that never saw the drafting context) validates the draft against seven checks before any human sees it; on a pass, the run stops at a human-in-the-loop checkpoint with the update and stories **queued for review**. Cortex never posts, commits a date, marks a launch gate, or merges anything — there are no tools for those actions — and when a source is missing, a bound trips, or a task tries to jailbreak it, Cortex escalates to a human instead of inventing or acting.
 
 ## How you built it
 
-- **Coding agent:** _which one you directed (Claude Code / Cursor / Codex)_
-- **Model + bounds:** _model used, max iterations, cost cap, queue cap_
-- **Repo / config:** _path to your build in `00-build/`_
-- **Live link:** _[shareable URL, optional bonus]_
+- **Coding agent:** Claude Code (directing the edits; no code hand-written).
+- **Model + bounds:** `gpt-4.1-mini` for both drafter and critic. Enforced bounds: max 8 iterations, 2 critic↔drafter revisions, 3 data-pull attempts, $0.50/run + $20/day cost caps, 10-story queue cap, 90s per-run + 15s per-call timeout, and a `CORTEX_HALT` kill switch (8 of 9 bounds enforced in code).
+- **Repo / config:** [`00-build/`](../00-build) — `agent.py` (loop + bounds), `critic.py` (validator), `tools.py` (read-only tools + queue), `prompts.py`; `.env` holds the key + tuning.
+- **Live link:** [github.com/jfwaters/pm-os-agent](https://github.com/jfwaters/pm-os-agent)
 
 ## Screenshots (required, collected M2 to M6)
 
@@ -26,7 +26,7 @@ This table is a contents list; the screenshots themselves are in the per-module 
 | 3 | [grounded update](M4-grounded-update.png) · [withheld source](M4-withheld-source.png) · [view ↓](#m4-grounded-update) | a grounded update citing pulled activity + a caught hallucination | M4 |
 | 4 | [jailbreak refusal](M5-jailbreak-refusal.png) · [view ↓](#m5-jailbreak-refused) | jailbreak refused + escalated | M5 |
 | 5 | [bound halts runaway](M5-bound-halts-runaway.png) · [view ↓](#m5-bound-trip) | an iteration/cost/queue bound halting a runaway | M5 |
-| 6 | _pending_ | end-to-end run | M6 |
+| 6 | [end-to-end run](M6-end-to-end-run.png) · [view ↓](#m6-end-to-end-run) | end-to-end run | M6 |
 
 ### M2: happy path
 
@@ -88,8 +88,23 @@ The same happy-path task run with the iteration cap set below what it needs (`CO
 
 ### M6: end-to-end run
 
-_Pending — to be captured in M6._
+[↑ back to contents](#screenshots-required-collected-m2-to-m6)
+
+The full happy path with every module's machinery live: Cortex pulls all five sources, proposes a story batch (right at the 10-item cap), drafts a grounded GREEN update (39% → 41%, #818 noted, no committed dates), the independent critic returns `pass`, and the run stops at the HITL checkpoint — queued for review, nothing posted or committed.
+
+<img src="M6-end-to-end-run.png" alt="Cortex full end-to-end run stopping at the HITL checkpoint" width="800">
 
 ## How to run it
 
-_Minimal steps for someone to reproduce the demo (env vars, and the command or the coding-agent prompt you used)._
+```bash
+cd 00-build
+pip install -r requirements.txt      # into a venv on macOS (PEP 668)
+cp .env.example .env                 # add OPENAI_API_KEY; defaults set the bounds
+.venv/bin/python agent.py --force              # end-to-end happy path -> HITL checkpoint
+.venv/bin/python agent.py missing-data --force # stuck/escalate path
+.venv/bin/python agent.py jailbreak --force    # prompt-injection refusal
+CORTEX_WITHHOLD=get_activity .venv/bin/python agent.py probe --force  # grounding probe
+CORTEX_MAX_ITERATIONS=2 .venv/bin/python agent.py --force             # a bound trip
+```
+
+Each run prints the full trace and persists artifacts to `runs/<message_id>/` (gitignored). The default model is `gpt-4.1-mini`; all bounds are env-tunable (`CORTEX_MAX_ITERATIONS`, `CORTEX_COST_CAP_USD`, `CORTEX_HALT`, …).
